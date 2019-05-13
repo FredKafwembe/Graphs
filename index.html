@@ -1,0 +1,299 @@
+<!-- import sigma.js -->
+<!DOCTYPE html/>
+<html>
+  <head>
+    <script src="./javascript/sigma.min.js"></script>
+
+    <script>
+      var startingYear = 2;
+      var yearColumnNumber = 3;
+
+      var courseDataRetrived = false, prerequisiteDataRetrived = false;
+
+      var graphLevels = 0;
+      var g = { nodes: [], edges: [] };
+      var nodeLevels = [];
+
+      /*Define javascipt functions*/
+      function createNode(nodeName, nodeId, nodeX, nodeY, nodeSize = 10) {
+        return {id: nodeId, label: nodeName, x: nodeX, y: nodeY, size: nodeSize, color: '#666'};
+      }
+
+      function createEdge(sourceNode, targetNode, edgeWidth = 1) {
+        g.edges.push({id: sourceNode + '-' + targetNode, source: sourceNode, target: targetNode, size: edgeWidth, color: '#ccc'});
+      }
+
+      function addNode(level, nodeName, nodeId) {
+        if(level > graphLevels || level < 1) {
+          throw "graph level out of range";
+        }
+
+        node = createNode(nodeName, nodeId, 0, 0);
+        //console.log("Created node: " + node);
+        nodeLevels[level - 1].push(node);
+      }
+
+      function arrangeNodes() {
+        xOffset = 1/graphLevels;
+        for(i = 0; i < graphLevels; i++) {
+          yOffset = 1/nodeLevels[i].length;
+          for(j = 0; j < nodeLevels[i].length; j++) {
+            nodeLevels[i][j].x = i * xOffset + xOffset / 2;
+            nodeLevels[i][j].y = j * yOffset + yOffset / 2;
+          }
+        }
+      }
+
+      function combineNodes() {
+        allNodes = [];
+        for(i = 0; i < graphLevels; i++) {
+          for(j = 0; j < nodeLevels[i].length; j++) {
+            allNodes.push(nodeLevels[i][j]);
+            //console.log("Combined nodes: " + nodeLevels[i][j].id);
+          }
+        }
+
+        //for(i = 0; i < allNodes.length; i++) {
+        //  console.log("Combined nodes: " + allNodes[i].id);
+        //}
+        return allNodes;
+      }
+
+      function getCourses() {
+        var table = document.getElementById("Courses");
+
+        var tempCourses = [[], [], []];
+        for (var i = 0, row; row = table.rows[i]; i++) {
+          if(i == 0)
+            continue;
+
+          for (var j = 0, col; col = row.cells[j]; j++) {
+            //console.log("Found course: " + col.innerHTML);
+            tempCourses[j].push(col.innerHTML);
+            if(j == yearColumnNumber - 1) {
+              var year = parseInt(col.innerHTML);
+              if(graphLevels < year) {
+                graphLevels = year;
+              }
+            }
+          }
+        }
+
+        graphLevels -= startingYear - 1;
+  
+        //console.log("Graph levels: " + graphLevels);
+        for(i = 0; i < graphLevels; i++) {
+          nodeLevels.push([]);
+        }
+
+        //for(i = 0; i < tempCourses.length; i++) {
+        //  console.log("Found: " + tempCourses[i]);
+        //}
+
+        return tempCourses;
+      }
+
+      function getPrerequisites() {
+        var table = document.getElementById("Prerequisite");
+        var prerequisites = [[], []];
+        for (var i = 0, row; row = table.rows[i]; i++) {
+          if(i == 0)
+            continue;
+
+          for (var j = 0, col; col = row.cells[j]; j++) {
+            //console.log(col.innerHTML);
+            prerequisites[j].push(col.innerHTML);
+          }
+        }
+        return prerequisites;
+      }
+
+      function createGraph() {
+        if(courseDataRetrived && prerequisiteDataRetrived) {
+          var allNodes = combineNodes();
+          var combinedGraph = {nodes : allNodes, edges : g.edges }
+
+          //console.log("combined node count: " + combinedGraph.nodes.length);
+          //for(i = 0; i < combinedGraph.nodes.length; i++) {
+          //  console.log("Node: " + combinedGraph.nodes[i].id + "   " + combinedGraph.nodes[i].label);
+          //}
+          //for(i = 0; i < combinedGraph.edges.length; i++) {
+          //  console.log("Edge: " + combinedGraph.edges[i].source + "   " + combinedGraph.edges[i].target);
+          //}
+          // Instantiate sigma:
+          s = new sigma({
+            graph: combinedGraph,
+            container: 'graph-container'
+          });
+        }
+      }
+    </script>
+
+    <script>
+      if (window.XMLHttpRequest) {
+        xmlhttp = new XMLHttpRequest();
+      } else {
+        xmlhttp = new ActiveXObject("Microsoft.XMLHTTP");
+      }
+      xmlhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          document.getElementById("Courses").innerHTML = this.responseText;
+          var courses = getCourses();
+          courseDataRetrived = true;
+          
+          //for(i = 0; i < courses.length; i++) {
+            //console.log("Found: " + courses[i]);
+          //}
+
+          //console.log("Number of courses: " + courses.length);
+          for(i = 0; i < courses[0].length; i++) {
+            //console.log("Adding course: " + courses[2][i] + "   " + courses[1][i] + "   " + courses[0][i]);
+            addNode(parseInt(courses[2][i]) - (startingYear - 1), courses[0][i], courses[0][i]);
+          }
+          arrangeNodes();
+
+          createGraph();
+        }
+      };
+      xmlhttp.open("GET","./php/CourseModel.php?",true);
+      xmlhttp.send();
+    </script>
+
+    <script>
+      if (window.XMLHttpRequest) {
+        xmlhttp = new XMLHttpRequest();
+      } else {
+        xmlhttp = new ActiveXObject("Microsoft.XMLHTTP");
+      }
+      xmlhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          document.getElementById("Prerequisite").innerHTML = this.responseText;
+          var prerequisites = getPrerequisites();
+
+          prerequisiteDataRetrived = true;
+
+          for(i = 0; i < prerequisites.length - 1; i++) {
+            //console.log("Edge: " + prerequisites[0][i] + "   " + prerequisites[1][i]);
+            createEdge(prerequisites[0][i], prerequisites[1][i]);
+          }
+
+          createGraph();
+        }
+      };
+      xmlhttp.open("GET","./php/PrerequisiteModel.php?",true);
+      xmlhttp.send();
+    </script>
+  </head>
+
+  <body>
+    <div>
+      <table id="outer_table">
+        <tr>
+          <th>Courses</th>
+          <th>Prerequisite</th>
+        </tr>
+        <tr>
+          <td>
+            <table id="Courses">
+            </table>
+          </td>
+          <td>
+            <table id="Prerequisite">
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <form>
+              Course Name <input type="text" name="Course_name"><br>
+              Course Description <input type="text" name="Course_description"><br>
+              Course Year <input type="number" name="Course_year"><br>
+              <input type="submit" value="Add course">
+            </form>
+          </td>
+          <td>
+            <form>
+              Course Name <input type="text" name="Course"><br>
+              Course Prerequisite <input list="prerequisites">
+              <datalist id="prerequisites">
+                <option value="Internet Explorer">
+                <option value="Firefox">
+                <option value="Chrome">
+                <option value="Opera">
+                <option value="Safari">
+              </datalist><br>
+
+              <input type="submit" value="Add Prerequisite">
+            </form>    
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div id="container">
+      <style>
+        #graph-container {
+          height: 500px;
+          width: 100%;
+          position: fixed;
+        }
+      </style>
+      <div id="graph-container">
+
+      </div>
+    </div>
+
+    <script>
+
+
+/*
+      addNode(1, 'CSC2202', 'CSC2202');
+      addNode(1, 'CSC2702', 'CSC2702');
+      addNode(1, 'CSC2912', 'CSC2912');
+      addNode(1, 'CSC2101', 'CSC2101');
+      addNode(1, 'CSC2901', 'CSC2901');
+      addNode(1, 'CSC2111', 'CSC2111');
+      addNode(1, 'CSC2000', 'CSC2000');
+
+      addNode(2, 'CSC3120', 'CSC3120');
+      addNode(2, 'CSC3402', 'CSC3402');
+      addNode(2, 'CSC3712', 'CSC3712');
+      addNode(2, 'CSC3011', 'CSC3011');
+      addNode(2, 'CSC3612', 'CSC3612');
+      addNode(2, 'CSC3801', 'CSC3801');
+      addNode(2, 'CSC3301', 'CSC3301');
+      addNode(2, 'CSC3600', 'CSC3600');
+
+      addNode(3, 'CSC4505', 'CSC4505');
+      addNode(3, 'CSC4631', 'CSC4631');
+      addNode(3, 'CSC4642', 'CSC4642');
+      addNode(3, 'CSC4792', 'CSC4792');
+      addNode(3, 'CSC4035', 'CSC4035');
+      addNode(3, 'CSC4004', 'CSC4004');
+      addNode(3, 'CSC4630', 'CSC4630');
+
+      arrangeNodes();
+
+      createEdge('CSC2202', 'CSC3801');
+      createEdge('CSC2702', 'CSC3712');
+      createEdge('CSC2912', 'CSC3402');
+      createEdge('CSC2101', 'CSC3120');
+      createEdge('CSC2101', 'CSC3612');
+      createEdge('CSC2901', 'CSC3011');
+      createEdge('CSC2111', 'CSC3120');
+      createEdge('CSC2000', 'CSC3301');
+      createEdge('CSC2000', 'CSC3600');
+
+      createEdge('CSC3120', 'CSC4505');
+      createEdge('CSC3402', 'CSC4792');
+      createEdge('CSC3712', 'CSC4792');
+      createEdge('CSC3612', 'CSC4004');
+      createEdge('CSC3301', 'CSC4035');
+      createEdge('CSC3600', 'CSC4630');
+      createEdge('CSC3600', 'CSC4631');
+      createEdge('CSC3600', 'CSC4642');
+*/
+
+    </script>
+  </body>
+</html>
